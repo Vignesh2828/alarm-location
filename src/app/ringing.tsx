@@ -26,6 +26,7 @@ export default function RingingScreen() {
   const alarm = alarmId ? getAlarm(alarmId) : undefined;
   const player = useAudioPlayer(alarmSoundAsset);
   const startedRef = useRef(false);
+  const stoppedRef = useRef(false);
 
   // expo-audio's AudioPlayer is a native class instance designed to be mutated/controlled
   // directly (play/pause/loop), so this effect necessarily reaches into it — there's no
@@ -46,7 +47,16 @@ export default function RingingScreen() {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => true);
 
     return () => {
-      player.pause();
+      // If the user already tapped Stop/Snooze, the player was paused (and may already
+      // be released by expo-audio) — skip a redundant pause() that would throw.
+      if (!stoppedRef.current) {
+        stoppedRef.current = true;
+        try {
+          player.pause();
+        } catch {
+          // Native player may already be torn down during unmount races — safe to ignore.
+        }
+      }
       Vibration.cancel();
       subscription.remove();
     };
@@ -54,7 +64,14 @@ export default function RingingScreen() {
   }, []);
 
   const stopAlarm = () => {
-    player.pause();
+    if (!stoppedRef.current) {
+      stoppedRef.current = true;
+      try {
+        player.pause();
+      } catch {
+        // Native player may already be torn down — safe to ignore.
+      }
+    }
     Vibration.cancel();
   };
 
